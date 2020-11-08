@@ -1,143 +1,156 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 public class FlowField
 {
-    public Cell[,] grid { get; private set; }
-    public Vector2Int gridSize { get; private set; }
-    public float cellRadius { get; private set; }
-    public Cell destinationCell;
-    private float cellDiameter;
+	public Cell[,] grid { get; private set; }
+	public Vector2Int gridSize { get; private set; }
+	public float cellRadius { get; private set; }
 
-    public FlowField(Vector2Int _gridSize, float _cellRadius)
-    {
-        gridSize = _gridSize;
-        cellRadius = _cellRadius;
-    }
+	public Cell destinationCell;
+		
+	private float cellDiameter;
 
-    public void CreateGrid()
-    {
-        grid = new Cell[gridSize.x, gridSize.y];
+	public FlowField(float _cellRadius, Vector2Int _gridSize)
+	{
+		cellRadius = _cellRadius;
+		cellDiameter = _cellRadius * 2;
+		gridSize = _gridSize;
+	}
 
-        for(int x = 0;  x < gridSize.x; x++)
-        {
-            for(int y = 0; y < gridSize.y; y++)
-            {
-                Vector3 worldPos = new Vector3(cellDiameter * x + cellRadius, 0, cellDiameter * y + cellRadius);
-                grid[x, y] = new Cell(worldPos, new Vector2Int(x, y));
-            }
-        } 
-    }
+	public void CreateGrid()
+	{
+		//Debug.Log("Creating Grid");
+		grid = new Cell[gridSize.x, gridSize.y];
 
-    public void CreateCostField()
-    {
-        Vector3 cellHalfExtents = Vector3.one * cellRadius;
-        int terrainMask = LayerMask.GetMask("Impassible", "RoughTerrain");
-        foreach (Cell curCell in grid)
-        {
-            Collider[] obstacles = Physics.OverlapBox(curCell.worldPos, cellHalfExtents, Quaternion.identity, terrainMask);
-            bool hasIncreasedCost = false;
-            foreach (Collider col in obstacles)
-            {
-                if (col.gameObject.layer == 8)
-                {
-                    curCell.IncreaseCost(255);
-                    continue;
-                }
-                else if (!hasIncreasedCost && col.gameObject.layer == 9)
-                {
-                    curCell.IncreaseCost(3);
-                    hasIncreasedCost = true;
-                }
-            }
-        }
-    }
+		for(int x = 0; x < gridSize.x; x++)
+		{
+			for(int y = 0; y < gridSize.y; y++)
+			{
+				Vector3 worldPos = new Vector3(cellDiameter * x + cellRadius, 0, cellDiameter * y + cellRadius);
+				grid[x, y] = new Cell(worldPos, new Vector2Int(x,y));
+			}
+		}
+	}
 
-    private Cell GetCellAtRelativePos(Vector2Int orignPos, Vector2Int relativePos)
-    {
-        Vector2Int finalPos = orignPos + relativePos;
+	public void Reset()
+	{
+		foreach(Cell curCell in grid)
+		{
+			curCell.ResetCell();
+		}
+	}
 
-        if (finalPos.x < 0 || finalPos.x >= gridSize.x || finalPos.y < 0 || finalPos.y >= gridSize.y)
-        {
-            return null;
-        }
+	public void CreateCostField()
+	{
+		Vector3 cellHalfExtents = Vector3.one * cellRadius;
+		int terrainMask = LayerMask.GetMask("Impassible", "Terrain");
+		foreach(Cell curCell in grid)
+		{
+			Collider[] obstacles = Physics.OverlapBox(curCell.worldPos, cellHalfExtents, Quaternion.identity, terrainMask);
+			bool hasIncreasedCost = false;
+			foreach(Collider col in obstacles)
+			{
+				if(col.gameObject.layer == 8)
+				{
+					curCell.MakeImpassible();
+					continue;
+				}
+				else if(!hasIncreasedCost && col.gameObject.layer == 9)
+				{
+					curCell.IncreaseCost(3);
+					hasIncreasedCost = true;
+				}
+			}
+		}
+	}
 
-        else { return grid[finalPos.x, finalPos.y]; }
-    }
+	public void CreateIntegrationField(Cell _destinationCell)
+	{
+		destinationCell = _destinationCell;
+			
+		destinationCell.bestCost = 0;
 
-    public void CreateFlowField()
-    {
-        foreach (Cell curCell in grid)
-        {
-            List<Cell> curNeighbors = GetNeighborCells(curCell.gridIndex, GridDirection.AllDirections);
+		Queue<Cell> cellsToCheck = new Queue<Cell>();
 
-            int bestCost = curCell.bestCost;
+		cellsToCheck.Enqueue(destinationCell);
 
-            foreach (Cell curNeighbor in curNeighbors)
-            {
-                if (curNeighbor.bestCost < bestCost)
-                {
-                    bestCost = curNeighbor.bestCost;
-                    curCell.bestDirection = GridDirection.GetDirectionFromV2I(curNeighbor.gridIndex - curCell.gridIndex);
-                }
-            }
-        }
-    }
+		Debug.Log(cellsToCheck.Count);
+		while (cellsToCheck.Count > 0)
+		{
+			Cell curCell = cellsToCheck.Dequeue();
+			List<Cell> curNeighbors = GetNeighborCells(curCell.gridIndex, GridDirection.CardinalDirections);
+			foreach(Cell curNeighbor in curNeighbors)
+			{
+				if(curNeighbor.cost == byte.MaxValue) { continue; }
+				if(curNeighbor.cost + curCell.bestCost < curNeighbor.bestCost)
+				{
+					curNeighbor.bestCost = (ushort) (curNeighbor.cost + curCell.bestCost);
+					cellsToCheck.Enqueue(curNeighbor);
+				}
+			}
+		}
+	}
 
-    private List<Cell> GetNeighborCells(Vector2Int nodeIndex, List<GridDirection> directions)
-    {
-        List<Cell> neighborCells = new List<Cell>();
+	public void CreateFlowField()
+	{
+		foreach (Cell curCell in grid)
+		{
+			curCell.bestDirection = GridDirection.None;
 
-        foreach (Vector2Int curDirection in directions)
-        {
-            Cell newNeighbor = GetCellAtRelativePos(nodeIndex, curDirection);
-            if (newNeighbor != null)
-            {
-                neighborCells.Add(newNeighbor);
-            }
-        }
-        return neighborCells;
-    }
+			List<Cell> curNeighbors = GetNeighborCells(curCell.gridIndex, GridDirection.AllDirections);
 
-    public void CreateIntegrationField(Cell _destinationCell)
-    {
-        destinationCell = _destinationCell;
+			int bestCost = curCell.bestCost;
 
-        destinationCell.cost = 0;
-        destinationCell.bestCost = 0;
+			foreach (Cell curNeighbor in curNeighbors)
+			{
+				if (curNeighbor.bestCost < bestCost)
+				{
+					bestCost = curNeighbor.bestCost;
+					curCell.bestDirection = GridDirection.GetDirectionFromV2I(curNeighbor.gridIndex - curCell.gridIndex);
+				}
+			}
+		}
+	}
 
-        Queue<Cell> cellsToCheck = new Queue<Cell>();
+	public Cell GetCellFromWorldPos(Vector3 worldPos)
+	{
+		float percentX = worldPos.x / (gridSize.x * cellDiameter);
+		float percentY = worldPos.z / (gridSize.y * cellDiameter);
+			
+		percentX = Mathf.Clamp01(percentX);
+		percentY = Mathf.Clamp01(percentY);
 
-        cellsToCheck.Enqueue(destinationCell);
+		int x = Mathf.Clamp(Mathf.FloorToInt((gridSize.x) * percentX), 0, gridSize.x - 1);
+		int y = Mathf.Clamp(Mathf.FloorToInt((gridSize.y) * percentY), 0, gridSize.y - 1);
+		return grid[x, y];
+	}
 
-        while (cellsToCheck.Count > 0)
-        {
-            Cell curCell = cellsToCheck.Dequeue();
-            List<Cell> curNeighbors = GetNeighborCells(curCell.gridIndex, GridDirection.CardinalDirections);
-            foreach (Cell curNeighbor in curNeighbors)
-            {
-                if (curNeighbor.cost == byte.MaxValue) { continue; }
-                if (curNeighbor.cost + curCell.bestCost < curNeighbor.bestCost)
-                {
-                    curNeighbor.bestCost = (ushort)(curNeighbor.cost + curCell.bestCost);
-                    cellsToCheck.Enqueue(curNeighbor);
-                }
-            }
-        }
-    }
+	public List<Cell> GetNeighborCells(Vector2Int nodeIndex, List<GridDirection> directions)
+	{
+		List<Cell> neighborCells = new List<Cell>();
 
-    public Cell GetCellFromWorldPos(Vector3 worldPos)
-    {
-        float percentX = worldPos.x / (gridSize.x * cellDiameter);
-        float percentY = worldPos.z / (gridSize.y * cellDiameter);
+		foreach(Vector2Int curDirection in directions)
+		{
+			Cell newNeighbor = GetCellAtRelativePos(nodeIndex, curDirection);
+			if(newNeighbor != null)
+			{
+				neighborCells.Add(newNeighbor);
+			}
+		}
 
-        percentX = Mathf.Clamp01(percentX);
-        percentY = Mathf.Clamp01(percentY);
+		return neighborCells;
+	}
 
-        int x = Mathf.Clamp(Mathf.FloorToInt((gridSize.x) * percentX), 0, gridSize.x - 1);
-        int y = Mathf.Clamp(Mathf.FloorToInt((gridSize.y) * percentY), 0, gridSize.y - 1);
-        return grid[x, y];
-    }
+	private Cell GetCellAtRelativePos(Vector2Int orignPos, Vector2Int relativePos)
+	{
+		Vector2Int finalPos = orignPos + relativePos;
 
+		if(finalPos.x < 0 || finalPos.x >= gridSize.x || finalPos.y < 0 || finalPos.y >= gridSize.y)
+		{
+			return null;
+		}
+
+		else { return grid[finalPos.x, finalPos.y]; }
+	}				
 }

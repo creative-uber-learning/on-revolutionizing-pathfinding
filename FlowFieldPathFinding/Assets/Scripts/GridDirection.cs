@@ -2,6 +2,7 @@
 using System.Linq;
 using UnityEngine;
 
+
 public class GridDirection
 {
     public readonly Vector2Int Vector;
@@ -12,14 +13,14 @@ public class GridDirection
     }
 
     public static implicit operator Vector2Int(GridDirection direction)
-    {
+	{
         return direction.Vector;
-    }
+	}
 
     public static GridDirection GetDirectionFromV2I(Vector2Int vector)
-    {
+	{
         return CardinalAndIntercardinalDirections.DefaultIfEmpty(None).FirstOrDefault(direction => direction == vector);
-    }
+	}
 
     public static readonly GridDirection None = new GridDirection(0, 0);
     public static readonly GridDirection North = new GridDirection(0, 1);

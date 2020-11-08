@@ -1,33 +1,72 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Diagnostics;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 public class GridController : MonoBehaviour
 {
     public Vector2Int gridSize;
-    public float cellRadius = 0.5f;
-    public FlowField curFlowField;
-    public GridDebug gridDebug;
+    public float cellRadius = 1;     
+	public FlowField curFlowField;
+	public GridDebug gridDebug;
 
-    private void InitializeFlowField()
+    private Cell destinationCell;
+
+	private void InitializeFlowField()
+	{
+		Debug.Log($"Generating grid of size: {gridSize.ToString()}");
+		curFlowField = new FlowField(cellRadius, gridSize);
+		curFlowField.CreateGrid();
+		gridDebug.SetFlowField(curFlowField);
+	}
+		
+	void Update()
     {
-        curFlowField = new FlowField(gridSize, cellRadius);
-        curFlowField.CreateGrid();
-        gridDebug.SetFlowField(curFlowField);
-    }
+		if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetMouseButtonDown(0))
+		{
+			//Debug.Log("Ctrl + Click");
+			Vector3 mousePos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
+			Vector3 worldMousePos = Camera.main.ScreenToWorldPoint(mousePos);
+			Cell curCell = curFlowField.GetCellFromWorldPos(worldMousePos);
+			curCell.MakeImpassible();
+		}
 
-    private void Update()
-    {
-        if(Input.GetMouseButtonDown(0))
-        {
-            InitializeFlowField();
-            curFlowField.CreateCostField();
-            Vector3 mousePos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10f);
-            Vector3 worldMousePos = Camera.main.ScreenToWorldPoint(mousePos);
-            Cell destinationCell = curFlowField.GetCellFromWorldPos(worldMousePos);
-            curFlowField.CreateIntegrationField(destinationCell);
+		else if ((Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) && Input.GetMouseButtonDown(0))
+		{
+			//Debug.Log("Alt + Click");
+			Vector3 mousePos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
+			Vector3 worldMousePos = Camera.main.ScreenToWorldPoint(mousePos);
+			Cell curCell = curFlowField.GetCellFromWorldPos(worldMousePos);
+			curCell.IncreaseCost(10);
+		}
 
-            curFlowField.CreateFlowField();
-        }
-    }
+		else if (Input.GetMouseButtonDown(0))
+		{
+			if(curFlowField == null || curFlowField.gridSize != gridSize)
+			{
+				InitializeFlowField();
+			}
+			else
+			{
+				curFlowField.Reset();
+			}
+
+			Stopwatch st = new Stopwatch();
+			st.Start();
+
+			curFlowField.CreateCostField();
+
+			Vector3 mousePos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
+			Vector3 worldMousePos = Camera.main.ScreenToWorldPoint(mousePos);
+			destinationCell = curFlowField.GetCellFromWorldPos(worldMousePos);
+			curFlowField.CreateIntegrationField(destinationCell);
+			destinationCell.SetAsDestination();
+				
+			curFlowField.CreateFlowField();
+
+			st.Stop();
+			Debug.Log($"FFTime: {st.ElapsedMilliseconds}");
+
+			gridDebug.DrawFlowField();
+		}
+	}
 }
