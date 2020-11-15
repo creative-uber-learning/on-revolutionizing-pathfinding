@@ -44,7 +44,7 @@ public class FlowField
 	public void CreateCostField()
 	{
 		Vector3 cellHalfExtents = Vector3.one * cellRadius;
-		int terrainMask = LayerMask.GetMask("Impassible", "Terrain");
+		int terrainMask = LayerMask.GetMask("Impassible", "RoughTerrain");
 		foreach(Cell curCell in grid)
 		{
 			Collider[] obstacles = Physics.OverlapBox(curCell.worldPos, cellHalfExtents, Quaternion.identity, terrainMask);
